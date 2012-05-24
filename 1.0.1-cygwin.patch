@@ -1,0 +1,123 @@
+--- origsrc/qemu-1.0.1/compatfd.c	2012-02-17 13:45:39.000000000 -0600
++++ src/qemu-1.0.1/compatfd.c	2012-02-23 04:07:49.724599500 -0600
+@@ -14,7 +14,9 @@
+ #include "qemu-common.h"
+ #include "compatfd.h"
+ 
++#ifdef CONFIG_SIGNALFD
+ #include <sys/syscall.h>
++#endif
+ #include <pthread.h>
+ 
+ struct sigfd_compat_info
+--- origsrc/qemu-1.0.1/configure	2012-02-17 13:45:39.000000000 -0600
++++ src/qemu-1.0.1/configure	2012-02-23 04:25:51.785003700 -0600
+@@ -351,10 +351,9 @@ fi
+ 
+ case $targetos in
+ CYGWIN*)
+-  mingw32="yes"
+-  QEMU_CFLAGS="-mno-cygwin $QEMU_CFLAGS"
+-  audio_possible_drivers="winwave sdl"
+-  audio_drv_list="winwave"
++  cygwin="yes"
++  audio_drv_list="oss"
++  audio_possible_drivers="oss sdl esd pa"
+ ;;
+ MINGW32*)
+   mingw32="yes"
+@@ -2941,6 +2940,9 @@ fi
+ if test "$haiku" = "yes" ; then
+   echo "CONFIG_HAIKU=y" >> $config_host_mak
+ fi
++if test "$cygwin" = "yes" ; then
++  echo "CONFIG_CYGWIN=y" >> $config_host_mak
++fi
+ if test "$static" = "yes" ; then
+   echo "CONFIG_STATIC=y" >> $config_host_mak
+ fi
+--- origsrc/qemu-1.0.1/libcacard/Makefile	2012-02-17 13:45:39.000000000 -0600
++++ src/qemu-1.0.1/libcacard/Makefile	2012-02-23 04:05:57.421838900 -0600
+@@ -20,7 +20,7 @@ QEMU_CFLAGS+=$(GLIB_CFLAGS)
+ libcacard.lib-y=$(addsuffix .lo,$(basename $(libcacard-y)))
+ 
+ vscclient: $(libcacard-y) $(QEMU_OBJS) vscclient.o
+-	$(call quiet-command,$(CC) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
++	$(call quiet-command,$(CC) $(QEMU_CFLAGS) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
+ 
+ clean:
+ 	rm -f *.o */*.o *.d */*.d *.a */*.a *~ */*~ vscclient *.lo .libs/* *.la *.pc
+--- origsrc/qemu-1.0.1/Makefile.objs	2012-02-17 13:45:39.000000000 -0600
++++ src/qemu-1.0.1/Makefile.objs	2012-02-23 04:38:36.778645600 -0600
+@@ -53,6 +53,7 @@ net-nested-$(CONFIG_BSD) += tap-bsd.o
+ net-nested-$(CONFIG_SOLARIS) += tap-solaris.o
+ net-nested-$(CONFIG_AIX) += tap-aix.o
+ net-nested-$(CONFIG_HAIKU) += tap-haiku.o
++net-nested-$(CONFIG_CYGWIN) += tap-cygwin.o
+ net-nested-$(CONFIG_SLIRP) += slirp.o
+ net-nested-$(CONFIG_VDE) += vde.o
+ net-obj-y += $(addprefix net/, $(net-nested-y))
+--- origsrc/qemu-1.0.1/net/tap-cygwin.c	1969-12-31 18:00:00.000000000 -0600
++++ src/qemu-1.0.1/net/tap-cygwin.c	2012-02-23 04:24:37.263540700 -0600
+@@ -0,0 +1,61 @@
++/*
++ * QEMU System Emulator
++ *
++ * Copyright (c) 2003-2008 Fabrice Bellard
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
++ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++ * THE SOFTWARE.
++ */
++
++#include "net/tap.h"
++#include <stdio.h>
++
++int tap_open(char *ifname, int ifname_size, int *vnet_hdr, int vnet_hdr_required)
++{
++    fprintf(stderr, "no tap on Cygwin\n");
++    return -1;
++}
++
++int tap_set_sndbuf(int fd, QemuOpts *opts)
++{
++    return 0;
++}
++
++int tap_probe_vnet_hdr(int fd)
++{
++    return 0;
++}
++
++int tap_probe_has_ufo(int fd)
++{
++    return 0;
++}
++
++int tap_probe_vnet_hdr_len(int fd, int len)
++{
++    return 0;
++}
++
++void tap_fd_set_vnet_hdr_len(int fd, int len)
++{
++}
++
++void tap_fd_set_offload(int fd, int csum, int tso4,
++                        int tso6, int ecn, int ufo)
++{
++}

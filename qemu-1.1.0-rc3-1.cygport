@@ -1,0 +1,13 @@
+
+HOMEPAGE="http://www.qemu.org/"
+SRC_URI="http://wiki.qemu.org/download/${P}.tar.bz2"
+PATCH_URI="1.0.1-cygwin.patch"
+
+DIFF_EXCLUDES="roms"
+
+src_compile() {
+	cd ${B}
+	${S}/configure --prefix=/usr --sysconfdir=/etc \
+		--audio-drv-list=sdl,oss --disable-strip
+	cygmake
+}

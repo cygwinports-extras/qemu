@@ -1,0 +1,8 @@
+category: System
+requires: libbrlapi libcurl4 libGL1 libglib2.0_0 libgnutls26 libjpeg8 libncursesw10 libnspr4 libnss3 libpng14 libsasl2 libSDL1.2_0 libssp0 libuuid1 libX11_6 zlib0
+sdesc: "Processor emulator"
+ldesc: "QEMU is a fast processor emulator using dynamic translation to 
+achieve good emulation speed.  QEMU emulates a full system (for example 
+a PC), including one or several processors and various peripherals. It 
+can be used to launch different Operating Systems without rebooting the 
+PC or to debug system code."

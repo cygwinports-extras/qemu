@@ -1,7 +1,7 @@
 DESCRIPTION="Processor emulator"
 HOMEPAGE="http://www.qemu.org/"
 SRC_URI="http://wiki.qemu.org/download/${P}.tar.bz2"
-PATCH_URI="1.0.1-cygwin.patch"
+PATCH_URI="1.1.1-cygwin.patch"
 
 DIFF_EXCLUDES="roms"
 

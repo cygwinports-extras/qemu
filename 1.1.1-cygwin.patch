@@ -1,0 +1,176 @@
+--- origsrc/qemu-1.1.1/compatfd.c	2012-07-12 14:50:11.000000000 -0500
++++ src/qemu-1.1.1/compatfd.c	2012-07-15 05:48:58.000000000 -0500
+@@ -16,7 +16,9 @@
+ #include "qemu-common.h"
+ #include "compatfd.h"
+ 
++#ifdef CONFIG_SIGNALFD
+ #include <sys/syscall.h>
++#endif
+ #include <pthread.h>
+ 
+ struct sigfd_compat_info
+--- origsrc/qemu-1.1.1/configure	2012-07-12 14:50:11.000000000 -0500
++++ src/qemu-1.1.1/configure	2012-07-15 16:43:22.814712800 -0500
+@@ -365,10 +365,10 @@ fi
+ 
+ case $targetos in
+ CYGWIN*)
+-  mingw32="yes"
+-  QEMU_CFLAGS="-mno-cygwin $QEMU_CFLAGS"
+-  audio_possible_drivers="winwave sdl"
+-  audio_drv_list="winwave"
++  cygwin="yes"
++  audio_drv_list="oss"
++  audio_possible_drivers="oss sdl esd pa"
++  LIBS="$LIBS -liphlpapi"
+ ;;
+ MINGW32*)
+   mingw32="yes"
+@@ -3113,6 +3113,9 @@ fi
+ if test "$haiku" = "yes" ; then
+   echo "CONFIG_HAIKU=y" >> $config_host_mak
+ fi
++if test "$cygwin" = "yes" ; then
++  echo "CONFIG_CYGWIN=y" >> $config_host_mak
++fi
+ if test "$static" = "yes" ; then
+   echo "CONFIG_STATIC=y" >> $config_host_mak
+ fi
+--- origsrc/qemu-1.1.1/libcacard/Makefile	2012-07-12 14:50:12.000000000 -0500
++++ src/qemu-1.1.1/libcacard/Makefile	2012-07-15 05:48:58.000000000 -0500
+@@ -18,7 +18,7 @@ QEMU_CFLAGS+=-I../
+ libcacard.lib-y=$(addsuffix .lo,$(basename $(libcacard-y)))
+ 
+ vscclient: $(libcacard-y) $(QEMU_OBJS) vscclient.o
+-	$(call quiet-command,$(CC) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
++	$(call quiet-command,$(CC) $(QEMU_CFLAGS) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
+ 
+ clean:
+ 	rm -f *.o */*.o *.d */*.d *.a */*.a *~ */*~ vscclient *.lo .libs/* *.la *.pc
+--- origsrc/qemu-1.1.1/Makefile.objs	2012-07-12 14:50:11.000000000 -0500
++++ src/qemu-1.1.1/Makefile.objs	2012-07-15 22:32:54.243655700 -0500
+@@ -66,9 +66,10 @@ net-obj-y = net.o
+ net-nested-y = queue.o checksum.o util.o
+ net-nested-y += socket.o
+ net-nested-y += dump.o
+-net-nested-$(CONFIG_POSIX) += tap.o
++net-nested-$(CONFIG_POSIX)$(CONFIG_CYGWIN) += tap.o
+ net-nested-$(CONFIG_LINUX) += tap-linux.o
+ net-nested-$(CONFIG_WIN32) += tap-win32.o
++net-nested-$(CONFIG_CYGWIN) += tap-win32.o
+ net-nested-$(CONFIG_BSD) += tap-bsd.o
+ net-nested-$(CONFIG_SOLARIS) += tap-solaris.o
+ net-nested-$(CONFIG_AIX) += tap-aix.o
+--- origsrc/qemu-1.1.1/net/tap-win32.c	2012-07-12 14:50:12.000000000 -0500
++++ src/qemu-1.1.1/net/tap-win32.c	2012-07-15 22:33:19.248085900 -0500
+@@ -638,7 +638,9 @@ static void tap_cleanup(VLANClientState
+ {
+     TAPState *s = DO_UPCAST(TAPState, nc, nc);
+ 
++#ifndef __CYGWIN__
+     qemu_del_wait_object(s->handle->tap_semaphore, NULL, NULL);
++#endif
+ 
+     /* FIXME: need to kill thread and close file handle:
+        tap_win32_close(s);
+@@ -694,7 +696,9 @@ static int tap_win32_init(VLANState *vla
+ 
+     s->handle = handle;
+ 
++#ifndef __CYGWIN__
+     qemu_add_wait_object(s->handle->tap_semaphore, tap_win32_send, s);
++#endif
+ 
+     return 0;
+ }
+--- origsrc/qemu-1.1.1/net.c	2012-07-12 14:50:12.000000000 -0500
++++ src/qemu-1.1.1/net.c	2012-07-15 22:33:55.347145600 -0500
+@@ -39,7 +39,7 @@
+ #include "iov.h"
+ 
+ /* Net bridge is currently not supported for W32. */
+-#if !defined(_WIN32)
++#if !defined(_WIN32) && !defined(__CYGWIN__)
+ # define CONFIG_NET_BRIDGE
+ #endif
+ 
+--- origsrc/qemu-1.1.1/slirp/slirp.c	2012-07-12 14:50:12.000000000 -0500
++++ src/qemu-1.1.1/slirp/slirp.c	2012-07-15 18:17:20.257722400 -0500
+@@ -27,6 +27,15 @@
+ #include "slirp.h"
+ #include "hw/hw.h"
+ 
++#ifdef __CYGWIN__
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <iphlpapi.h>
++#undef _WIN32
++#define GlobalAlloc(type, size)  malloc(size)
++#define GlobalFree(ptr)  free(ptr)
++#endif
++
+ /* host loopback address */
+ struct in_addr loopback_addr;
+ 
+@@ -50,9 +59,13 @@ static QTAILQ_HEAD(slirp_instances, Slir
+ static struct in_addr dns_addr;
+ static u_int dns_addr_time;
+ 
+-#ifdef _WIN32
++#if defined(_WIN32) || defined(__CYGWIN__)
+ 
++#ifdef __CYGWIN__
++static int win32_get_dns_addr(struct in_addr *pdns_addr)
++#else
+ int get_dns_addr(struct in_addr *pdns_addr)
++#endif
+ {
+     FIXED_INFO *FixedInfo=NULL;
+     ULONG    BufLen;
+@@ -97,6 +110,10 @@ int get_dns_addr(struct in_addr *pdns_ad
+     return 0;
+ }
+ 
++#endif
++
++#ifdef _WIN32
++
+ static void winsock_cleanup(void)
+ {
+     WSACleanup();
+@@ -122,7 +139,11 @@ int get_dns_addr(struct in_addr *pdns_ad
+         }
+         old_stat = dns_addr_stat;
+         if (stat("/etc/resolv.conf", &dns_addr_stat) != 0)
++#ifdef __CYGWIN__
++            return win32_get_dns_addr(pdns_addr);
++#else
+             return -1;
++#endif
+         if ((dns_addr_stat.st_dev == old_stat.st_dev)
+             && (dns_addr_stat.st_ino == old_stat.st_ino)
+             && (dns_addr_stat.st_size == old_stat.st_size)
+@@ -134,7 +155,11 @@ int get_dns_addr(struct in_addr *pdns_ad
+ 
+     f = fopen("/etc/resolv.conf", "r");
+     if (!f)
++#ifdef __CYGWIN__
++        return win32_get_dns_addr(pdns_addr);
++#else
+         return -1;
++#endif
+ 
+ #ifdef DEBUG
+     lprint("IP address of your DNS(s): ");
+--- origsrc/qemu-1.1.1/slirp/slirp.h	2012-07-12 14:50:12.000000000 -0500
++++ src/qemu-1.1.1/slirp/slirp.h	2012-07-15 05:58:19.855205400 -0500
+@@ -18,7 +18,7 @@ typedef char *caddr_t;
+ #else
+ # define ioctlsocket ioctl
+ # define closesocket(s) close(s)
+-# if !defined(__HAIKU__)
++# if !defined(O_BINARY)
+ #  define O_BINARY 0
+ # endif
+ #endif

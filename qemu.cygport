@@ -1,0 +1,22 @@
+NAME="qemu"
+VERSION=1.2.0
+RELEASE=1
+CATEGORY="System"
+SUMMARY="Processor emulator"
+DESCRIPTION="QEMU is a fast processor emulator using dynamic translation to
+achieve good emulation speed.  QEMU emulates a full system (for example a PC),
+including one or several processors and various peripherals. It can be used
+to launch different Operating Systems without rebooting the PC, or to debug
+system code."
+HOMEPAGE="http://www.qemu.org/"
+SRC_URI="http://wiki.qemu.org/download/${P}.tar.bz2"
+PATCH_URI="1.1.1-cygwin.patch"
+
+DIFF_EXCLUDES="roms"
+
+src_compile() {
+	cd ${B}
+	${S}/configure --prefix=/usr --sysconfdir=/etc \
+		--audio-drv-list=sdl,oss --disable-strip
+	cygmake
+}

@@ -1,6 +1,6 @@
 NAME="qemu"
 VERSION=1.2.0
-RELEASE=1
+RELEASE=2
 CATEGORY="System"
 SUMMARY="Processor emulator"
 DESCRIPTION="QEMU is a fast processor emulator using dynamic translation to

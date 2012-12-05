@@ -42,7 +42,7 @@
 @@ -164,7 +164,7 @@ qemu-io$(EXESUF): qemu-io.o cmd.o $(tool
  qemu-bridge-helper$(EXESUF): qemu-bridge-helper.o
  
- vscclient$(EXESUF): $(libcacard-y) $(oslib-obj-y) $(trace-obj-y) $(tools-obj-y) qemu-timer-common.o libcacard/vscclient.o
+ vscclient$(EXESUF): $(libcacard-y) $(oslib-obj-y) $(trace-obj-y) libcacard/vscclient.o libqemustub.a
 -	$(call quiet-command,$(CC) $(LDFLAGS) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
 +	$(call quiet-command,$(CC) $(QEMU_CFLAGS) $(LDFLAGS) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
  
@@ -95,20 +95,6 @@
  # define CONFIG_NET_BRIDGE
  #endif
  
---- origsrc/qemu-1.2.0/osdep.c	2012-09-05 09:03:06.000000000 -0500
-+++ src/qemu-1.2.0/osdep.c	2012-10-17 03:09:11.300603800 -0500
-@@ -113,7 +113,10 @@ static int qemu_dup_flags(int fd, int fl
-     }
- 
-     /* Set/unset flags that we can with fcntl */
--    setfl_flags = O_APPEND | O_ASYNC | O_NONBLOCK;
-+    setfl_flags = O_APPEND | O_NONBLOCK;
-+#ifdef O_ASYNC
-+    setfl_flags |= O_ASYNC;
-+#endif
- #ifdef O_NOATIME
-     setfl_flags |= O_NOATIME;
- #endif
 --- origsrc/qemu-1.1.1/slirp/slirp.c	2012-07-12 14:50:12.000000000 -0500
 +++ src/qemu-1.1.1/slirp/slirp.c	2012-07-15 18:17:20.257722400 -0500
 @@ -27,6 +27,15 @@

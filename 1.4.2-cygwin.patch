@@ -1,18 +1,6 @@
---- origsrc/qemu-1.1.1/compatfd.c	2012-07-12 14:50:11.000000000 -0500
-+++ src/qemu-1.1.1/compatfd.c	2012-07-15 05:48:58.000000000 -0500
-@@ -16,7 +16,9 @@
- #include "qemu-common.h"
- #include "compatfd.h"
- 
-+#ifdef CONFIG_SIGNALFD
- #include <sys/syscall.h>
-+#endif
- #include <pthread.h>
- 
- struct sigfd_compat_info
---- origsrc/qemu-1.1.1/configure	2012-07-12 14:50:11.000000000 -0500
-+++ src/qemu-1.1.1/configure	2012-07-15 16:43:22.814712800 -0500
-@@ -365,10 +365,10 @@ fi
+--- origsrc/qemu-1.4.2/configure	2013-05-24 08:37:57.000000000 -0500
++++ src/qemu-1.4.2/configure	2013-06-26 16:12:37.129379900 -0500
+@@ -414,10 +414,10 @@ fi
  
  case $targetos in
  CYGWIN*)
@@ -27,7 +15,7 @@
  ;;
  MINGW32*)
    mingw32="yes"
-@@ -3113,6 +3113,9 @@ fi
+@@ -3465,6 +3465,9 @@ fi
  if test "$haiku" = "yes" ; then
    echo "CONFIG_HAIKU=y" >> $config_host_mak
  fi
@@ -37,21 +25,10 @@
  if test "$static" = "yes" ; then
    echo "CONFIG_STATIC=y" >> $config_host_mak
  fi
---- origsrc/qemu-1.2.0/Makefile	2012-09-05 09:03:06.000000000 -0500
-+++ src/qemu-1.2.0/Makefile	2012-10-17 03:17:23.059779600 -0500
-@@ -164,7 +164,7 @@ qemu-io$(EXESUF): qemu-io.o cmd.o $(tool
- qemu-bridge-helper$(EXESUF): qemu-bridge-helper.o
- 
- vscclient$(EXESUF): $(libcacard-y) $(oslib-obj-y) $(trace-obj-y) libcacard/vscclient.o libqemustub.a
--	$(call quiet-command,$(CC) $(LDFLAGS) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
-+	$(call quiet-command,$(CC) $(QEMU_CFLAGS) $(LDFLAGS) -o $@ $^ $(libcacard_libs) $(LIBS),"  LINK  $@")
- 
- fsdev/virtfs-proxy-helper$(EXESUF): fsdev/virtfs-proxy-helper.o fsdev/virtio-9p-marshal.o oslib-posix.o $(trace-obj-y)
- fsdev/virtfs-proxy-helper$(EXESUF): LIBS += -lcap
---- origsrc/qemu-1.1.1/net/Makefile.objs	2012-07-12 14:50:11.000000000 -0500
-+++ src/qemu-1.1.1/net/Makefile.objs	2012-07-15 22:32:54.243655700 -0500
-@@ -66,9 +66,10 @@ net-obj-y = net.o
- common-obj-y = queue.o checksum.o util.o
+--- origsrc/qemu-1.4.2/net/Makefile.objs	2013-05-24 08:37:57.000000000 -0500
++++ src/qemu-1.4.2/net/Makefile.objs	2013-06-26 16:12:37.135380700 -0500
+@@ -1,9 +1,10 @@
+ common-obj-y = net.o queue.o checksum.o util.o hub.o
  common-obj-y += socket.o
  common-obj-y += dump.o
 -common-obj-$(CONFIG_POSIX) += tap.o
@@ -62,9 +39,20 @@
  common-obj-$(CONFIG_BSD) += tap-bsd.o
  common-obj-$(CONFIG_SOLARIS) += tap-solaris.o
  common-obj-$(CONFIG_AIX) += tap-aix.o
---- origsrc/qemu-1.1.1/net/tap-win32.c	2012-07-12 14:50:12.000000000 -0500
-+++ src/qemu-1.1.1/net/tap-win32.c	2012-07-15 22:33:19.248085900 -0500
-@@ -638,7 +638,9 @@ static void tap_cleanup(VLANClientState
+--- origsrc/qemu-1.4.2/net/net.c	2013-05-24 08:37:57.000000000 -0500
++++ src/qemu-1.4.2/net/net.c	2013-06-26 16:12:37.147382200 -0500
+@@ -41,7 +41,7 @@
+ #include "qapi/dealloc-visitor.h"
+ 
+ /* Net bridge is currently not supported for W32. */
+-#if !defined(_WIN32)
++#if !defined(_WIN32) && !defined(__CYGWIN__)
+ # define CONFIG_NET_BRIDGE
+ #endif
+ 
+--- origsrc/qemu-1.4.2/net/tap-win32.c	2013-05-24 08:37:57.000000000 -0500
++++ src/qemu-1.4.2/net/tap-win32.c	2013-06-26 16:12:37.141381400 -0500
+@@ -641,7 +641,9 @@ static void tap_cleanup(NetClientState *
  {
      TAPState *s = DO_UPCAST(TAPState, nc, nc);
  
@@ -74,7 +62,7 @@
  
      /* FIXME: need to kill thread and close file handle:
         tap_win32_close(s);
-@@ -694,7 +696,9 @@ static int tap_win32_init(VLANState *vla
+@@ -697,7 +699,9 @@ static int tap_win32_init(NetClientState
  
      s->handle = handle;
  
@@ -84,19 +72,8 @@
  
      return 0;
  }
---- origsrc/qemu-1.1.1/net.c	2012-07-12 14:50:12.000000000 -0500
-+++ src/qemu-1.1.1/net.c	2012-07-15 22:33:55.347145600 -0500
-@@ -39,7 +39,7 @@
- #include "iov.h"
- 
- /* Net bridge is currently not supported for W32. */
--#if !defined(_WIN32)
-+#if !defined(_WIN32) && !defined(__CYGWIN__)
- # define CONFIG_NET_BRIDGE
- #endif
- 
---- origsrc/qemu-1.1.1/slirp/slirp.c	2012-07-12 14:50:12.000000000 -0500
-+++ src/qemu-1.1.1/slirp/slirp.c	2012-07-15 18:17:20.257722400 -0500
+--- origsrc/qemu-1.4.2/slirp/slirp.c	2013-05-24 08:37:57.000000000 -0500
++++ src/qemu-1.4.2/slirp/slirp.c	2013-06-26 16:12:37.153883000 -0500
 @@ -27,6 +27,15 @@
  #include "slirp.h"
  #include "hw/hw.h"
@@ -112,8 +89,8 @@
 +
  /* host loopback address */
  struct in_addr loopback_addr;
- 
-@@ -50,9 +59,13 @@ static QTAILQ_HEAD(slirp_instances, Slir
+ /* host loopback network mask */
+@@ -52,9 +61,13 @@ static QTAILQ_HEAD(slirp_instances, Slir
  static struct in_addr dns_addr;
  static u_int dns_addr_time;
  
@@ -128,7 +105,7 @@
  {
      FIXED_INFO *FixedInfo=NULL;
      ULONG    BufLen;
-@@ -97,6 +110,10 @@ int get_dns_addr(struct in_addr *pdns_ad
+@@ -99,6 +112,10 @@ int get_dns_addr(struct in_addr *pdns_ad
      return 0;
  }
  
@@ -139,7 +116,7 @@
  static void winsock_cleanup(void)
  {
      WSACleanup();
-@@ -122,7 +139,11 @@ int get_dns_addr(struct in_addr *pdns_ad
+@@ -124,7 +141,11 @@ int get_dns_addr(struct in_addr *pdns_ad
          }
          old_stat = dns_addr_stat;
          if (stat("/etc/resolv.conf", &dns_addr_stat) != 0)
@@ -151,7 +128,7 @@
          if ((dns_addr_stat.st_dev == old_stat.st_dev)
              && (dns_addr_stat.st_ino == old_stat.st_ino)
              && (dns_addr_stat.st_size == old_stat.st_size)
-@@ -134,7 +155,11 @@ int get_dns_addr(struct in_addr *pdns_ad
+@@ -136,7 +157,11 @@ int get_dns_addr(struct in_addr *pdns_ad
  
      f = fopen("/etc/resolv.conf", "r");
      if (!f)
@@ -163,8 +140,8 @@
  
  #ifdef DEBUG
      lprint("IP address of your DNS(s): ");
---- origsrc/qemu-1.1.1/slirp/slirp.h	2012-07-12 14:50:12.000000000 -0500
-+++ src/qemu-1.1.1/slirp/slirp.h	2012-07-15 05:58:19.855205400 -0500
+--- origsrc/qemu-1.4.2/slirp/slirp.h	2013-05-24 08:37:57.000000000 -0500
++++ src/qemu-1.4.2/slirp/slirp.h	2013-06-26 16:12:37.159383700 -0500
 @@ -18,7 +18,7 @@ typedef char *caddr_t;
  #else
  # define ioctlsocket ioctl
@@ -174,3 +151,15 @@
  #  define O_BINARY 0
  # endif
  #endif
+--- origsrc/qemu-1.4.2/util/compatfd.c	2013-05-24 08:37:58.000000000 -0500
++++ src/qemu-1.4.2/util/compatfd.c	2013-06-26 16:12:37.121378900 -0500
+@@ -16,7 +16,9 @@
+ #include "qemu-common.h"
+ #include "qemu/compatfd.h"
+ 
++#ifdef CONFIG_SIGNALFD
+ #include <sys/syscall.h>
++#endif
+ #include <pthread.h>
+ 
+ struct sigfd_compat_info

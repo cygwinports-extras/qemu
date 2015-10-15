@@ -1,0 +1,280 @@
+--- origsrc/qemu-2.4.0.1/block/raw-posix.c	2015-09-22 17:00:47.000000000 -0500
++++ src/qemu-2.4.0.1/block/raw-posix.c	2015-10-12 23:10:12.763352900 -0500
+@@ -93,6 +93,10 @@
+ #include <sys/diskslice.h>
+ #endif
+ 
++#ifdef __CYGWIN__
++#include <sys/ioctl.h>
++#endif
++
+ #ifdef CONFIG_XFS
+ #include <xfs/xfs.h>
+ #endif
+--- origsrc/qemu-2.4.0.1/configure	2015-09-22 17:00:47.000000000 -0500
++++ src/qemu-2.4.0.1/configure	2015-10-12 22:53:34.366572600 -0500
+@@ -570,10 +570,10 @@ HOST_VARIANT_DIR=""
+ 
+ case $targetos in
+ CYGWIN*)
+-  mingw32="yes"
+-  QEMU_CFLAGS="-mno-cygwin $QEMU_CFLAGS"
+-  audio_possible_drivers="sdl"
+-  audio_drv_list="sdl"
++  cygwin="yes"
++  audio_drv_list="oss"
++  audio_possible_drivers="oss sdl pa"
++  LIBS="$LIBS -liphlpapi"
+ ;;
+ MINGW32*)
+   mingw32="yes"
+@@ -4668,6 +4668,10 @@ if test "$linux" = "yes" ; then
+   echo "CONFIG_LINUX=y" >> $config_host_mak
+ fi
+ 
++if test "$cygwin" = "yes" ; then
++  echo "CONFIG_CYGWIN=y" >> $config_host_mak
++fi
++
+ if test "$darwin" = "yes" ; then
+   echo "CONFIG_DARWIN=y" >> $config_host_mak
+ fi
+--- origsrc/qemu-2.4.0.1/libcacard/libcacard.syms	2015-09-22 17:00:50.000000000 -0500
++++ src/qemu-2.4.0.1/libcacard/libcacard.syms	2015-10-12 23:11:26.578226200 -0500
+@@ -1,5 +1,4 @@
+ cac_card_init
+-cac_is_cac_card
+ vcard_add_applet
+ vcard_apdu_delete
+ vcard_apdu_new
+--- origsrc/qemu-2.4.0.1/net/Makefile.objs	2015-09-22 17:00:51.000000000 -0500
++++ src/qemu-2.4.0.1/net/Makefile.objs	2015-10-12 23:15:06.734682600 -0500
+@@ -3,9 +3,10 @@ common-obj-y += socket.o
+ common-obj-y += dump.o
+ common-obj-y += eth.o
+ common-obj-$(CONFIG_L2TPV3) += l2tpv3.o
+-common-obj-$(CONFIG_POSIX) += tap.o vhost-user.o
++common-obj-$(CONFIG_POSIX)$(CONFIG_CYGWIN) += tap.o vhost-user.o
+ common-obj-$(CONFIG_LINUX) += tap-linux.o
+ common-obj-$(CONFIG_WIN32) += tap-win32.o
++common-obj-$(CONFIG_CYGWIN) += tap-win32.o
+ common-obj-$(CONFIG_BSD) += tap-bsd.o
+ common-obj-$(CONFIG_SOLARIS) += tap-solaris.o
+ common-obj-$(CONFIG_AIX) += tap-aix.o
+--- origsrc/qemu-2.4.0.1/net/net.c	2015-09-22 17:00:51.000000000 -0500
++++ src/qemu-2.4.0.1/net/net.c	2015-10-12 22:54:53.188081700 -0500
+@@ -46,7 +46,7 @@
+ #include "sysemu/sysemu.h"
+ 
+ /* Net bridge is currently not supported for W32. */
+-#if !defined(_WIN32)
++#if !defined(_WIN32) && !defined(__CYGWIN__)
+ # define CONFIG_NET_BRIDGE
+ #endif
+ 
+--- origsrc/qemu-2.4.0.1/net/tap-win32.c	2015-09-22 17:00:51.000000000 -0500
++++ src/qemu-2.4.0.1/net/tap-win32.c	2015-10-12 22:55:29.077639100 -0500
+@@ -641,7 +641,9 @@ static void tap_cleanup(NetClientState *
+ {
+     TAPState *s = DO_UPCAST(TAPState, nc, nc);
+ 
++#ifndef __CYGWIN__
+     qemu_del_wait_object(s->handle->tap_semaphore, NULL, NULL);
++#endif
+ 
+     /* FIXME: need to kill thread and close file handle:
+        tap_win32_close(s);
+@@ -756,7 +758,9 @@ static int tap_win32_init(NetClientState
+ 
+     s->handle = handle;
+ 
++#ifndef __CYGWIN__
+     qemu_add_wait_object(s->handle->tap_semaphore, tap_win32_send, s);
++#endif
+ 
+     return 0;
+ }
+--- origsrc/qemu-2.4.0.1/os-posix.c	2015-09-22 17:00:51.000000000 -0500
++++ src/qemu-2.4.0.1/os-posix.c	2015-10-12 23:07:32.444495000 -0500
+@@ -325,6 +325,7 @@ bool is_daemonized(void)
+ 
+ int os_mlock(void)
+ {
++#ifdef MCL_CURRENT
+     int ret = 0;
+ 
+     ret = mlockall(MCL_CURRENT | MCL_FUTURE);
+@@ -333,4 +334,7 @@ int os_mlock(void)
+     }
+ 
+     return ret;
++#else
++    return -ENOSYS;
++#endif
+ }
+--- origsrc/qemu-2.4.0.1/slirp/slirp.c	2015-09-22 17:00:51.000000000 -0500
++++ src/qemu-2.4.0.1/slirp/slirp.c	2015-10-12 22:57:57.425476900 -0500
+@@ -27,6 +27,15 @@
+ #include "slirp.h"
+ #include "hw/hw.h"
+ 
++#ifdef __CYGWIN__
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <iphlpapi.h>
++#undef _WIN32
++#define GlobalAlloc(type, size)  malloc(size)
++#define GlobalFree(ptr)  free(ptr)
++#endif
++
+ /* host loopback address */
+ struct in_addr loopback_addr;
+ /* host loopback network mask */
+@@ -50,9 +59,13 @@ static u_int dns_addr_time;
+ /* for the aging of certain requests like DNS */
+ #define TIMEOUT_DEFAULT 1000  /* milliseconds */
+ 
+-#ifdef _WIN32
++#if defined(_WIN32) || defined(__CYGWIN__)
+ 
++#ifdef __CYGWIN__
++static int win32_get_dns_addr(struct in_addr *pdns_addr)
++#else
+ int get_dns_addr(struct in_addr *pdns_addr)
++#endif
+ {
+     FIXED_INFO *FixedInfo=NULL;
+     ULONG    BufLen;
+@@ -97,6 +110,10 @@ int get_dns_addr(struct in_addr *pdns_ad
+     return 0;
+ }
+ 
++#endif
++
++#ifdef _WIN32
++
+ static void winsock_cleanup(void)
+ {
+     WSACleanup();
+@@ -122,7 +139,11 @@ int get_dns_addr(struct in_addr *pdns_ad
+         }
+         old_stat = dns_addr_stat;
+         if (stat("/etc/resolv.conf", &dns_addr_stat) != 0)
++#ifdef __CYGWIN__
++            return win32_get_dns_addr(pdns_addr);
++#else
+             return -1;
++#endif
+         if ((dns_addr_stat.st_dev == old_stat.st_dev)
+             && (dns_addr_stat.st_ino == old_stat.st_ino)
+             && (dns_addr_stat.st_size == old_stat.st_size)
+@@ -134,7 +155,11 @@ int get_dns_addr(struct in_addr *pdns_ad
+ 
+     f = fopen("/etc/resolv.conf", "r");
+     if (!f)
++#ifdef __CYGWIN__
++        return win32_get_dns_addr(pdns_addr);
++#else
+         return -1;
++#endif
+ 
+ #ifdef DEBUG
+     fprintf(stderr, "IP address of your DNS(s): ");
+--- origsrc/qemu-2.4.0.1/slirp/slirp.h	2015-09-22 17:00:51.000000000 -0500
++++ src/qemu-2.4.0.1/slirp/slirp.h	2015-10-12 22:58:10.853182000 -0500
+@@ -18,7 +18,7 @@ typedef char *caddr_t;
+ #else
+ # define ioctlsocket ioctl
+ # define closesocket(s) close(s)
+-# if !defined(__HAIKU__)
++# if !defined(O_BINARY)
+ #  define O_BINARY 0
+ # endif
+ #endif
+--- origsrc/qemu-2.4.0.1/tcg/i386/tcg-target.c	2015-09-22 17:00:52.000000000 -0500
++++ src/qemu-2.4.0.1/tcg/i386/tcg-target.c	2015-10-12 23:00:30.646433500 -0500
+@@ -65,7 +65,7 @@ static const int tcg_target_reg_alloc_or
+ 
+ static const int tcg_target_call_iarg_regs[] = {
+ #if TCG_TARGET_REG_BITS == 64
+-#if defined(_WIN64)
++#if defined(_WIN64) || (defined(__CYGWIN__) && defined(__x86_64__))
+     TCG_REG_RCX,
+     TCG_REG_RDX,
+ #else
+@@ -2233,7 +2233,7 @@ static int tcg_target_callee_save_regs[]
+ #if TCG_TARGET_REG_BITS == 64
+     TCG_REG_RBP,
+     TCG_REG_RBX,
+-#if defined(_WIN64)
++#if defined(_WIN64) || (defined(__CYGWIN__) && defined(__x86_64__))
+     TCG_REG_RDI,
+     TCG_REG_RSI,
+ #endif
+@@ -2358,7 +2358,7 @@ static void tcg_target_init(TCGContext *
+     tcg_regset_set_reg(tcg_target_call_clobber_regs, TCG_REG_EDX);
+     tcg_regset_set_reg(tcg_target_call_clobber_regs, TCG_REG_ECX);
+     if (TCG_TARGET_REG_BITS == 64) {
+-#if !defined(_WIN64)
++#if !defined(_WIN64) && !(defined(__CYGWIN__) && defined(__x86_64__))
+         tcg_regset_set_reg(tcg_target_call_clobber_regs, TCG_REG_RDI);
+         tcg_regset_set_reg(tcg_target_call_clobber_regs, TCG_REG_RSI);
+ #endif
+--- origsrc/qemu-2.4.0.1/tcg/i386/tcg-target.h	2015-09-22 17:00:52.000000000 -0500
++++ src/qemu-2.4.0.1/tcg/i386/tcg-target.h	2015-10-12 23:00:54.971522400 -0500
+@@ -68,7 +68,7 @@ typedef enum {
+ /* used for function call generation */
+ #define TCG_REG_CALL_STACK TCG_REG_ESP 
+ #define TCG_TARGET_STACK_ALIGN 16
+-#if defined(_WIN64)
++#if defined(_WIN64) || (defined(__CYGWIN__) && defined(__x86_64__))
+ #define TCG_TARGET_CALL_STACK_OFFSET 32
+ #else
+ #define TCG_TARGET_CALL_STACK_OFFSET 0
+--- origsrc/qemu-2.4.0.1/util/compatfd.c	2015-09-22 17:00:55.000000000 -0500
++++ src/qemu-2.4.0.1/util/compatfd.c	2015-10-12 22:58:33.550064100 -0500
+@@ -17,7 +17,9 @@
+ #include "qemu/compatfd.h"
+ #include "qemu/thread.h"
+ 
++#ifdef CONFIG_SIGNALFD
+ #include <sys/syscall.h>
++#endif
+ 
+ struct sigfd_compat_info
+ {
+--- origsrc/qemu-2.4.0.1/util/qemu-openpty.c	2015-09-22 17:00:55.000000000 -0500
++++ src/qemu-2.4.0.1/util/qemu-openpty.c	2015-10-12 23:09:29.688883200 -0500
+@@ -35,7 +35,7 @@
+ #include "config-host.h"
+ #include "qemu-common.h"
+ 
+-#if defined(__GLIBC__)
++#if defined(__GLIBC__) || defined(__CYGWIN__)
+ # include <pty.h>
+ #elif defined CONFIG_BSD
+ # include <termios.h>
+--- origsrc/qemu-2.4.0.1/util/qemu-thread-posix.c	2015-09-22 17:00:55.000000000 -0500
++++ src/qemu-2.4.0.1/util/qemu-thread-posix.c	2015-10-13 02:23:24.518318900 -0500
+@@ -71,8 +71,10 @@ void qemu_mutex_lock(QemuMutex *mutex)
+     int err;
+ 
+     err = pthread_mutex_lock(&mutex->lock);
++#if 0
+     if (err)
+         error_exit(err, __func__);
++#endif
+ }
+ 
+ int qemu_mutex_trylock(QemuMutex *mutex)
+@@ -85,8 +87,10 @@ void qemu_mutex_unlock(QemuMutex *mutex)
+     int err;
+ 
+     err = pthread_mutex_unlock(&mutex->lock);
++#if 0
+     if (err)
+         error_exit(err, __func__);
++#endif
+ }
+ 
+ void qemu_cond_init(QemuCond *cond)

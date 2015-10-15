@@ -1,5 +1,5 @@
 NAME="qemu"
-VERSION=1.4.2
+VERSION=2.4.0.1
 RELEASE=1
 CATEGORY="System"
 SUMMARY="Processor emulator"
@@ -10,7 +10,7 @@ to launch different Operating Systems without rebooting the PC, or to debug
 system code."
 HOMEPAGE="http://www.qemu.org/"
 SRC_URI="http://wiki.qemu.org/download/qemu-${VERSION}.tar.bz2"
-PATCH_URI="1.4.2-cygwin.patch"
+PATCH_URI="2.4.0-cygwin.patch"
 
 PKG_NAMES="qemu libcacard0 libcacard-devel"
 qemu_CONTENTS="etc/ usr/bin/*.exe usr/share/"
@@ -21,13 +21,13 @@ libcacard_devel_CATEGORY="Libs"
 libcacard_devel_SUMMARY="CA Card library (development)"
 libcacard_devel_CONTENTS="usr/include/ usr/lib/"
 
-DIFF_EXCLUDES="roms"
+DIFF_EXCLUDES="po roms"
+DISTCLEANFILES="include/libfdt_env.h"
 
 src_compile() {
 	cd ${B}
 	CFLAGS+=" -DO_ASYNC=0"
 	${S}/configure --prefix=/usr --sysconfdir=/etc \
-		--with-coroutine=gthread \
 		--audio-drv-list=sdl,oss --disable-strip
 	cygmake
 }
